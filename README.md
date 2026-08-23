@@ -140,7 +140,7 @@ Alternatively, go to **System Settings > Privacy & Security** and click **"Allow
 | Command | Description |
 | :--- | :--- |
 | `lapdog setup` | Interactive wizard for Telegram bot token, chat ID, and background service setup |
-| `lapdog run` | Starts the security daemon (use `--mock` for simulator mode) |
+| `lapdog run` | Starts the security daemon (use `--background` to run silently in background, `--mock` for simulator) |
 | `lapdog away` | Arms Away Mode (alerts enabled for access events) |
 | `lapdog back` | Disarms Away Mode (suppresses non-critical alerts) |
 | `lapdog status` | Displays dashboard status, version build metadata, and queue metrics |

@@ -88,27 +88,47 @@ WantedBy=%s
 		return nil
 
 	case "windows":
-		// Stop and clean up any legacy sc.exe service if present
+		// Stop and clean up any legacy sc.exe service or background running processes
+		_ = exec.Command("schtasks", "/End", "/TN", "lapdog").Run()
+		killOtherLapdogInstances()
 		_ = exec.Command("sc.exe", "stop", "lapdog").Run()
 		_ = exec.Command("sc.exe", "delete", "lapdog").Run()
 
-		trCmd := fmt.Sprintf(`"%s" run --config "%s"`, absExec, absCfg)
-		// Register task scheduler job that starts on logon automatically with highest available privileges
+		// Create silent background launcher script (lapdog_bg.vbs)
+		cfgDir := filepath.Dir(absCfg)
+		_ = os.MkdirAll(cfgDir, 0755)
+		vbsPath := filepath.Join(cfgDir, "lapdog_bg.vbs")
+
+		vbsContent := fmt.Sprintf(`' lap-dog Windows Silent Background Launcher
+Set WshShell = CreateObject("WScript.Shell")
+WshShell.Run """%s"" run --config ""%s"" --background", 0, False
+`, absExec, absCfg)
+
+		if err := os.WriteFile(vbsPath, []byte(vbsContent), 0644); err != nil {
+			return fmt.Errorf("failed to write background launcher script: %w", err)
+		}
+
+		trCmd := fmt.Sprintf(`wscript.exe "%s"`, vbsPath)
+		methodUsed := "Windows Task Scheduler"
+
+		// Try registering task scheduler job that starts on logon automatically
 		cmd := exec.Command("schtasks", "/Create", "/TN", "lapdog", "/TR", trCmd, "/SC", "ONLOGON", "/RL", "HIGHEST", "/F")
-		_, err = cmd.CombinedOutput()
-		if err != nil {
-			// If highest privilege fails (e.g. non-admin user), fallback to standard user level task
+		if err := cmd.Run(); err != nil {
 			fallbackCmd := exec.Command("schtasks", "/Create", "/TN", "lapdog", "/TR", trCmd, "/SC", "ONLOGON", "/F")
-			fallbackOut, fallbackErr := fallbackCmd.CombinedOutput()
-			if fallbackErr != nil {
-				return fmt.Errorf("failed to register startup task in Windows Task Scheduler: %w (%s)", fallbackErr, string(fallbackOut))
+			if fallbackErr := fallbackCmd.Run(); fallbackErr != nil {
+				// Fallback to HKCU Run key if Task Scheduler is restricted
+				regCmd := exec.Command("reg", "add", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "/v", "lapdog", "/t", "REG_SZ", "/d", trCmd, "/f")
+				if regOut, regErr := regCmd.CombinedOutput(); regErr != nil {
+					return fmt.Errorf("failed to register startup task in Task Scheduler and Registry: %w (%s)", regErr, string(regOut))
+				}
+				methodUsed = "Windows User Startup Registry (HKCU\\...\\Run)"
 			}
 		}
 
-		// Run task immediately in background
-		_ = exec.Command("schtasks", "/Run", "/TN", "lapdog").Run()
-		fmt.Println("✓ Windows startup task 'lapdog' registered successfully in Task Scheduler.")
-		fmt.Println("  lap-dog is now running in the background and will start automatically on every boot/logon.")
+		// Run background launcher immediately via wscript.exe
+		_ = exec.Command("wscript.exe", "//B", vbsPath).Start()
+		fmt.Printf("✓ Windows silent background startup task 'lapdog' registered successfully via %s.\n", methodUsed)
+		fmt.Println("  lap-dog is now running silently in the background (no console window).")
 		return nil
 
 	default:
@@ -152,13 +172,30 @@ func ServiceUninstall() error {
 		_ = exec.Command("schtasks", "/End", "/TN", "lapdog").Run()
 		_ = exec.Command("schtasks", "/Delete", "/TN", "lapdog", "/F").Run()
 
+		// Delete Registry Run key if registered
+		_ = exec.Command("reg", "delete", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "/v", "lapdog", "/f").Run()
+
+		// Terminate any running instances other than current process
+		killOtherLapdogInstances()
+
 		// Also clean up any legacy sc.exe service
 		_ = exec.Command("sc.exe", "stop", "lapdog").Run()
 		_ = exec.Command("sc.exe", "delete", "lapdog").Run()
+
+		// Remove VBS launcher script
+		home, _ := os.UserHomeDir()
+		vbsPath := filepath.Join(home, ".lapdog", "lapdog_bg.vbs")
+		_ = os.Remove(vbsPath)
 
 		fmt.Println("Windows background startup task 'lapdog' stopped and removed.")
 		return nil
 	default:
 		return fmt.Errorf("unsupported OS")
 	}
+}
+
+func killOtherLapdogInstances() {
+	currPid := os.Getpid()
+	filter := fmt.Sprintf("PID ne %d", currPid)
+	_ = exec.Command("taskkill", "/F", "/FI", filter, "/IM", "lapdog.exe").Run()
 }

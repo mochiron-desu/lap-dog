@@ -15,8 +15,11 @@ Write-Host "⏳ Stopping and deleting Windows background service / task..." -For
 try {
     schtasks /End /TN "lapdog" 2>$null | Out-Null
     schtasks /Delete /TN "lapdog" /F 2>$null | Out-Null
+    Stop-Process -Name "lapdog" -Force -ErrorAction SilentlyContinue
     sc.exe stop lapdog 2>$null | Out-Null
     sc.exe delete lapdog 2>$null | Out-Null
+    $VbsLauncher = Join-Path $ConfigDir "lapdog_bg.vbs"
+    if (Test-Path $VbsLauncher) { Remove-Item -Path $VbsLauncher -Force 2>$null }
     Write-Host "✓ Windows background service / task 'lapdog' removed." -ForegroundColor Green
 } catch {
     # Ignore if service wasn't installed

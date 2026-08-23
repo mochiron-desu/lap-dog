@@ -27,7 +27,7 @@ import (
 )
 
 var (
-	version   = "v0.1.0"
+	version   = "v0.1.4"
 	commit    = "dev"
 	buildDate = "unknown"
 )
@@ -54,7 +54,14 @@ func main() {
 		runCmd := flag.NewFlagSet("run", flag.ExitOnError)
 		cfgPath := runCmd.String("config", defaultCfgPath, "Path to configuration YAML file")
 		mockMode := runCmd.Bool("mock", false, "Enable mock simulator detector mode")
+		backgroundMode := runCmd.Bool("background", false, "Run daemon silently in background")
+		runCmd.BoolVar(backgroundMode, "d", false, "Run daemon silently in background (shorthand)")
+		runCmd.BoolVar(backgroundMode, "b", false, "Run daemon silently in background (shorthand)")
 		_ = runCmd.Parse(os.Args[2:])
+
+		if *backgroundMode {
+			service.HideConsoleWindow()
+		}
 
 		cfg, err := config.LoadConfig(*cfgPath)
 		if err != nil {
@@ -155,7 +162,7 @@ func printUsage() {
 
 Usage:
   lapdog setup [--config config.yaml]        Run interactive configuration & service setup wizard
-  lapdog run [--config config.yaml] [--mock] Start background security monitoring daemon
+  lapdog run [--config config.yaml] [--background] [--mock] Start security monitoring daemon
   lapdog away [--config config.yaml]         Arm Away Mode (alerts ON)
   lapdog back [--config config.yaml]         Disarm Away Mode (suppress non-critical alerts)
   lapdog status [--config config.yaml]       Display agent status and queue metrics

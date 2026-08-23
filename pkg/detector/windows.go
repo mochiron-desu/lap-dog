@@ -55,6 +55,7 @@ while ($true) {
 `
 
 	cmd := exec.CommandContext(ctx, "powershell", "-NoProfile", "-Command", psScript)
+	setHiddenProcAttr(cmd)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("powershell pipe error: %w", err)
