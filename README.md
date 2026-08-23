@@ -1,6 +1,6 @@
 # lap-dog: Cross-Platform Laptop Security Agent 🐕
 
-**lap-dog** is a lightweight, cross-platform background security agent written in Go. It monitors laptop authentication and access events (logins, unlock attempts, remote sessions, USB insertions) across **Windows**, **Linux**, and **macOS**, sending instant alerts and interactive controls via a Telegram bot.
+**lap-dog** is a lightweight, cross-platform background security agent written in Go. It monitors laptop authentication and access events (logins, unlock attempts, remote sessions, USB insertions) across **Windows**, **Linux**, and **macOS**, sending instant alerts and interactive controls via a Telegram bot !
 
 ---
 
