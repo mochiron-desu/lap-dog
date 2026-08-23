@@ -20,6 +20,18 @@ func ServiceInstall(execPath, cfgPath string) error {
 
 	switch runtime.GOOS {
 	case "linux":
+		unitPath := "/etc/systemd/system/lapdog.service"
+		target := "multi-user.target"
+
+		// Try root directory first, fallback to user systemd directory
+		if err := os.WriteFile(unitPath, []byte(""), 0644); err != nil {
+			home, _ := os.UserHomeDir()
+			userUnitDir := filepath.Join(home, ".config", "systemd", "user")
+			_ = os.MkdirAll(userUnitDir, 0755)
+			unitPath = filepath.Join(userUnitDir, "lapdog.service")
+			target = "default.target"
+		}
+
 		serviceContent := fmt.Sprintf(`[Unit]
 Description=lap-dog Security Agent
 After=network.target auditd.service
@@ -31,23 +43,18 @@ Restart=always
 RestartSec=5s
 
 [Install]
-WantedBy=multi-user.target
-`, absExec, absCfg)
+WantedBy=%s
+`, absExec, absCfg, target)
 
-		unitPath := "/etc/systemd/system/lapdog.service"
 		if err := os.WriteFile(unitPath, []byte(serviceContent), 0644); err != nil {
-			// Try user systemd directory if root fails
-			home, _ := os.UserHomeDir()
-			userUnitDir := filepath.Join(home, ".config", "systemd", "user")
-			_ = os.MkdirAll(userUnitDir, 0755)
-			unitPath = filepath.Join(userUnitDir, "lapdog.service")
-			if userErr := os.WriteFile(unitPath, []byte(serviceContent), 0644); userErr != nil {
-				return fmt.Errorf("failed to write systemd service (root & user): %w", err)
-			}
-			fmt.Printf("Systemd user service written to %s\nRun 'systemctl --user enable --now lapdog'\n", unitPath)
-			return nil
+			return fmt.Errorf("failed to write systemd service: %w", err)
 		}
-		fmt.Printf("Systemd service written to %s\nRun 'sudo systemctl daemon-reload && sudo systemctl enable --now lapdog'\n", unitPath)
+
+		if target == "default.target" {
+			fmt.Printf("Systemd user service written to %s\nRun 'systemctl --user enable --now lapdog'\n", unitPath)
+		} else {
+			fmt.Printf("Systemd service written to %s\nRun 'sudo systemctl daemon-reload && sudo systemctl enable --now lapdog'\n", unitPath)
+		}
 		return nil
 
 	case "darwin":
