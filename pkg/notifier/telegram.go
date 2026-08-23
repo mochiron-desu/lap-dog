@@ -14,6 +14,7 @@ import (
 	"lap-dog/pkg/config"
 	"lap-dog/pkg/event"
 	"lap-dog/pkg/storage"
+	"lap-dog/pkg/updater"
 )
 
 type TelegramNotifier struct {
@@ -22,6 +23,7 @@ type TelegramNotifier struct {
 	httpClient *http.Client
 	baseURL    string
 	startTime  time.Time
+	version    string
 }
 
 func NewTelegramNotifier(cfg *config.Config, store *storage.Storage) *TelegramNotifier {
@@ -31,7 +33,13 @@ func NewTelegramNotifier(cfg *config.Config, store *storage.Storage) *TelegramNo
 		httpClient: &http.Client{Timeout: 10 * time.Second},
 		baseURL:    "https://api.telegram.org",
 		startTime:  time.Now(),
+		version:    "dev",
 	}
+}
+
+// SetVersion sets the agent version string for update checks
+func (t *TelegramNotifier) SetVersion(v string) {
+	t.version = v
 }
 
 // SetBaseURL allows overriding the Telegram API endpoint (useful for testing)
@@ -230,6 +238,23 @@ func (t *TelegramNotifier) handleCommand(chatID int64, text string) {
 			t.cfg.Hostname, t.cfg.DeviceID, statusStr, pending, sent, uptime)
 		_ = t.SendMessage(chatID, reply)
 
+	case "/update", "/checkupdate":
+		_ = t.SendMessage(chatID, "🔍 Checking GitHub for lap-dog updates...")
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			result, err := updater.CheckUpdate(ctx, t.version, updater.DefaultRepo)
+			if err != nil {
+				errMsg := fmt.Sprintf("⚠️ <b>Failed to check for updates:</b>\n<code>%s</code>", err.Error())
+				_ = t.SendMessage(chatID, errMsg)
+				return
+			}
+
+			msg := updater.FormatTelegramMessage(result, t.cfg.Hostname, t.cfg.DeviceID)
+			_ = t.SendMessage(chatID, msg)
+		}()
+
 	case "/test":
 		testEvt := event.SecurityEvent{
 			ID:        fmt.Sprintf("test-%d", time.Now().Unix()),
@@ -250,8 +275,59 @@ func (t *TelegramNotifier) handleCommand(chatID int64, text string) {
 			"/away - Arm monitoring (away mode ON)\n" +
 			"/back - Disarm monitoring (away mode OFF)\n" +
 			"/status - Show current agent metrics & device state\n" +
+			"/update - Check for latest release & upgrade instructions\n" +
 			"/test - Trigger a test alert notification\n" +
 			"/help - Display this command menu"
 		_ = t.SendMessage(chatID, reply)
 	}
 }
+
+// StartPeriodicUpdateChecker periodically checks GitHub for new releases and notifies Telegram
+func (t *TelegramNotifier) StartPeriodicUpdateChecker(ctx context.Context) {
+	if t.cfg.TelegramBotToken == "" || t.cfg.TelegramChatID == 0 {
+		return
+	}
+
+	ticker := time.NewTicker(12 * time.Hour)
+	defer ticker.Stop()
+
+	checkAndNotify := func() {
+		checkCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+
+		result, err := updater.CheckUpdate(checkCtx, t.version, updater.DefaultRepo)
+		if err != nil {
+			log.Printf("[Notifier] Update check failed: %v", err)
+			return
+		}
+
+		if result.UpdateAvailable {
+			lastNotified := t.store.GetLastNotifiedVersion()
+			if result.LatestVersion != lastNotified {
+				log.Printf("[Notifier] New lap-dog release detected: %s (current: %s)", result.LatestVersion, t.version)
+				msg := updater.FormatTelegramMessage(result, t.cfg.Hostname, t.cfg.DeviceID)
+				if err := t.SendMessage(t.cfg.TelegramChatID, msg); err == nil {
+					_ = t.store.SetLastNotifiedVersion(result.LatestVersion)
+				}
+			}
+		}
+	}
+
+	// Initial check 30 seconds after daemon starts
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(30 * time.Second):
+		checkAndNotify()
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			checkAndNotify()
+		}
+	}
+}
+

@@ -21,10 +21,11 @@ type SentRecord struct {
 }
 
 type StoreData struct {
-	PendingQueue []event.SecurityEvent `json:"pending_queue"`
-	SentHistory  []SentRecord          `json:"sent_history"`
-	AwayMode     bool                  `json:"away_mode"`
-	UpdatedAt    time.Time             `json:"updated_at"`
+	PendingQueue        []event.SecurityEvent `json:"pending_queue"`
+	SentHistory         []SentRecord          `json:"sent_history"`
+	AwayMode            bool                  `json:"away_mode"`
+	LastNotifiedVersion string                `json:"last_notified_version,omitempty"`
+	UpdatedAt           time.Time             `json:"updated_at"`
 }
 
 type Storage struct {
@@ -207,4 +208,19 @@ func (s *Storage) GetStats() (int, int, bool) {
 	defer s.mu.RUnlock()
 
 	return len(s.data.PendingQueue), len(s.data.SentHistory), s.data.AwayMode
+}
+
+func (s *Storage) GetLastNotifiedVersion() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.data.LastNotifiedVersion
+}
+
+func (s *Storage) SetLastNotifiedVersion(v string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.data.LastNotifiedVersion = v
+	return s.saveLocked()
 }

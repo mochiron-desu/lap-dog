@@ -114,4 +114,16 @@ func TestTelegramNotifierSendAndPoll(t *testing.T) {
 	if !store.GetAwayMode() {
 		t.Errorf("expected away mode to be true after /away command")
 	}
+
+	// 4. Test /help command
+	notifier.handleCommand(999, "/help")
+
+	// 5. Test /status command
+	notifier.handleCommand(999, "/status")
+
+	// 6. Test SetVersion
+	notifier.SetVersion("v0.1.0")
+	if notifier.version != "v0.1.0" {
+		t.Errorf("expected version v0.1.0, got %s", notifier.version)
+	}
 }

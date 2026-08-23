@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 )
 
 func ServiceInstall(execPath, cfgPath string) error {
@@ -96,7 +95,7 @@ WantedBy=%s
 		trCmd := fmt.Sprintf(`"%s" run --config "%s"`, absExec, absCfg)
 		// Register task scheduler job that starts on logon automatically with highest available privileges
 		cmd := exec.Command("schtasks", "/Create", "/TN", "lapdog", "/TR", trCmd, "/SC", "ONLOGON", "/RL", "HIGHEST", "/F")
-		out, err := cmd.CombinedOutput()
+		_, err = cmd.CombinedOutput()
 		if err != nil {
 			// If highest privilege fails (e.g. non-admin user), fallback to standard user level task
 			fallbackCmd := exec.Command("schtasks", "/Create", "/TN", "lapdog", "/TR", trCmd, "/SC", "ONLOGON", "/F")

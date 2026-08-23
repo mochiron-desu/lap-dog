@@ -75,4 +75,12 @@ func TestStorageQueueAndHistory(t *testing.T) {
 	if pending != 0 || sent != 1 || !away {
 		t.Errorf("unexpected stats: pending=%d, sent=%d, away=%v", pending, sent, away)
 	}
+
+	// Test LastNotifiedVersion
+	if err := store2.SetLastNotifiedVersion("v0.2.0"); err != nil {
+		t.Fatalf("SetLastNotifiedVersion failed: %v", err)
+	}
+	if store2.GetLastNotifiedVersion() != "v0.2.0" {
+		t.Errorf("expected LastNotifiedVersion v0.2.0, got %s", store2.GetLastNotifiedVersion())
+	}
 }

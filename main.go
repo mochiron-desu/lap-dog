@@ -23,6 +23,7 @@ import (
 	"lap-dog/pkg/notifier"
 	"lap-dog/pkg/service"
 	"lap-dog/pkg/storage"
+	"lap-dog/pkg/updater"
 )
 
 var (
@@ -132,6 +133,9 @@ func main() {
 
 		runUninstall(*purgeFlag, *forceFlag)
 
+	case "update", "check-update":
+		runUpdateCheck()
+
 	case "version":
 		fmt.Printf("lap-dog %s (commit: %s, built: %s, platform: %s/%s)\n", version, commit, buildDate, runtime.GOOS, runtime.GOARCH)
 
@@ -157,10 +161,24 @@ Usage:
   lapdog status [--config config.yaml]       Display agent status and queue metrics
   lapdog test [--config config.yaml]         Send a test Telegram alert
   lapdog simulate [--event TYPE] [--user ...] Inject a synthetic security event for testing
+  lapdog update                              Check for updates & show platform upgrade instructions
   lapdog service [install|uninstall]         Manage system daemon service
   lapdog uninstall [--purge] [--force]       Uninstall lap-dog and remove service/binary
   lapdog version                             Show version & build info
 `, version)
+}
+
+func runUpdateCheck() {
+	fmt.Printf("🔍 Checking for updates for lap-dog (%s)...\n\n", updater.DefaultRepo)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	result, err := updater.CheckUpdate(ctx, version, updater.DefaultRepo)
+	if err != nil {
+		log.Fatalf("Failed to check for updates: %v", err)
+	}
+
+	fmt.Print(updater.FormatCLIMessage(result))
 }
 
 func runAgent(cfg *config.Config) {
@@ -178,6 +196,7 @@ func runAgent(cfg *config.Config) {
 
 	eng := engine.NewEngine(cfg, store)
 	notif := notifier.NewTelegramNotifier(cfg, store)
+	notif.SetVersion(version)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -196,9 +215,10 @@ func runAgent(cfg *config.Config) {
 	// 3. Start engine processing loop
 	go eng.Run(ctx, eventChan)
 
-	// 4. Start Telegram notifier dispatch & command poller
+	// 4. Start Telegram notifier dispatch, command poller & background update checker
 	go notif.StartQueueDispatcher(ctx)
 	go notif.StartCommandPoller(ctx)
+	go notif.StartPeriodicUpdateChecker(ctx)
 
 	log.Printf("[main] lap-dog agent is running. Press Ctrl+C to stop.")
 

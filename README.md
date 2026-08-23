@@ -146,6 +146,7 @@ Alternatively, go to **System Settings > Privacy & Security** and click **"Allow
 | `lapdog status` | Displays dashboard status, version build metadata, and queue metrics |
 | `lapdog test` | Enqueues and sends a test alert notification |
 | `lapdog simulate` | Injects synthetic test events (`--event LOGIN_FAILURE --user attacker`) |
+| `lapdog update` | Checks for newer releases on GitHub and displays platform upgrade instructions |
 | `lapdog service install` | Registers lap-dog as a background system service (systemd / launchd / Windows Service) |
 | `lapdog service uninstall` | Unregisters background system service |
 | `lapdog uninstall` | Uninstalls lap-dog, stops background service, and removes binary (`--purge` removes `~/.lapdog`) |
@@ -189,11 +190,33 @@ make uninstall
 ## 🤖 Telegram Bot Commands
 
 Send commands directly to your Telegram bot:
-- `/away` - Arm monitoring mode
-- `/back` - Disarm monitoring mode
+- `/away` - Arm monitoring mode (alerts ON)
+- `/back` - Disarm monitoring mode (suppresses non-critical alerts)
 - `/status` - Query current agent state, pending queue, and uptime
-- `/test` - Trigger test alert
+- `/update` - Check for latest release & receive platform-specific upgrade commands
+- `/test` - Trigger test alert notification
 - `/help` - Show command reference
+
+---
+
+## 🔄 Checking for Updates & Upgrading
+
+`lap-dog` includes built-in update checking and notification mechanisms:
+
+1. **Automatic Background Notifications**: While running in the background, `lap-dog` checks for newly published releases every 12 hours. When an update is available, it sends a Telegram alert containing the exact upgrade command for your laptop's operating system.
+2. **On-Demand Telegram Check**: Send `/update` to your Telegram bot anytime to check your current version against GitHub releases.
+3. **On-Demand CLI Check**: Run `lapdog update` from the terminal.
+
+### 💻 Platform Upgrade One-Liners
+
+- **Linux & macOS (Bash)**:
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/mochiron-desu/lap-dog/main/scripts/install.sh | bash
+  ```
+- **Windows (PowerShell)**:
+  ```powershell
+  irm https://raw.githubusercontent.com/mochiron-desu/lap-dog/main/scripts/install.ps1 | iex
+  ```
 
 ---
 
