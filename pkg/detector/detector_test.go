@@ -75,4 +75,72 @@ func TestLinuxParsing(t *testing.T) {
 	if evt.SourceIP != "192.168.1.50" {
 		t.Errorf("expected 192.168.1.50, got %s", evt.SourceIP)
 	}
+
+	// Test cron session ignore
+	cronEntry := JournalEntry{
+		Message: "pam_unix(cron:session): session opened for user root(uid=0) by root(uid=0)",
+	}
+	if _, ok := linuxDet.parseJournalEntry(&cronEntry); ok {
+		t.Errorf("expected cron session to be ignored, but it was parsed as an event")
+	}
+}
+
+func TestWindowsParsing(t *testing.T) {
+	cfg := config.DefaultConfig()
+	winDet := NewWindowsDetector(cfg)
+
+	// Service logon (LogonType 5) should be ignored
+	svcEntry := winEventData{
+		Id: 4624,
+		Message: `An account was successfully logged on.
+Account Name: SYSTEM
+Logon Type: 5`,
+	}
+	if _, ok := winDet.parseWinEvent(&svcEntry); ok {
+		t.Errorf("expected Windows Service logon to be ignored")
+	}
+
+	// Interactive logon (LogonType 2) should be detected
+	userEntry := winEventData{
+		Id: 4624,
+		Message: `An account was successfully logged on.
+Account Name: alice
+Logon Type: 2
+Source Network Address: 127.0.0.1`,
+	}
+	evt, ok := winDet.parseWinEvent(&userEntry)
+	if !ok {
+		t.Fatalf("expected interactive Windows logon to be parsed")
+	}
+	if evt.Username != "alice" {
+		t.Errorf("expected alice, got %s", evt.Username)
+	}
+	if evt.EventType != event.LoginSuccess {
+		t.Errorf("expected LoginSuccess, got %s", evt.EventType)
+	}
+}
+
+func TestDarwinParsing(t *testing.T) {
+	cfg := config.DefaultConfig()
+	macDet := NewDarwinDetector(cfg)
+
+	// Periodic task should be ignored
+	cronEntry := macOSLogEntry{
+		EventMessage: "com.apple.periodic sessionDidLogin for root",
+	}
+	if _, ok := macDet.parseDarwinEntry(&cronEntry); ok {
+		t.Errorf("expected macOS periodic task to be ignored")
+	}
+
+	// Real login should be parsed
+	userEntry := macOSLogEntry{
+		EventMessage: "User logged in successfully via loginwindow",
+	}
+	evt, ok := macDet.parseDarwinEntry(&userEntry)
+	if !ok {
+		t.Fatalf("expected macOS user login to be parsed")
+	}
+	if evt.EventType != event.LoginSuccess {
+		t.Errorf("expected LoginSuccess, got %s", evt.EventType)
+	}
 }

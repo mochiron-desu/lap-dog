@@ -196,6 +196,10 @@ func (l *LinuxDetector) parseJournalEntry(entry *JournalEntry) (event.SecurityEv
 		return baseEvt, true
 	}
 	if matches := rePAMSession.FindStringSubmatch(msg); len(matches) >= 2 {
+		// Ignore automated background cron and system daemon sessions
+		if strings.Contains(msg, "cron:session") || strings.Contains(msg, "systemd:session") || strings.Contains(msg, "systemd-user:session") || strings.Contains(msg, "polkit-1:session") {
+			return event.SecurityEvent{}, false
+		}
 		baseEvt.EventType = event.LoginSuccess
 		baseEvt.Username = matches[1]
 		baseEvt.Source = "pam_unix"

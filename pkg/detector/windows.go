@@ -119,6 +119,17 @@ func (w *WindowsDetector) parseWinEvent(entry *winEventData) (event.SecurityEven
 		logonType := extractWinField(entry.Message, "Logon Type:")
 		username := extractWinField(entry.Message, "Account Name:")
 
+		// Ignore background services (LogonType 5), scheduled tasks (LogonType 4), and system startups (LogonType 0)
+		if logonType == "0" || logonType == "4" || logonType == "5" {
+			return event.SecurityEvent{}, false
+		}
+
+		// Ignore Windows system and machine accounts
+		upperUser := strings.ToUpper(username)
+		if upperUser == "SYSTEM" || upperUser == "LOCAL SERVICE" || upperUser == "NETWORK SERVICE" || upperUser == "ANONYMOUS LOGON" || strings.HasSuffix(username, "$") {
+			return event.SecurityEvent{}, false
+		}
+
 		baseEvt.Username = username
 		baseEvt.LogonType = logonType
 		baseEvt.SourceIP = extractWinField(entry.Message, "Source Network Address:")

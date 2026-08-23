@@ -8,6 +8,7 @@ import (
 	"io"
 	"os/exec"
 	"regexp"
+	"strings"
 	"time"
 
 	"lap-dog/pkg/config"
@@ -99,6 +100,10 @@ func (d *DarwinDetector) parseDarwinEntry(entry *macOSLogEntry) (event.SecurityE
 	reSudoFail := regexp.MustCompile(`3 incorrect password attempts|authentication failure`)
 
 	if reLogin.MatchString(msg) {
+		// Ignore automated daemon logins or periodic background tasks
+		if strings.Contains(msg, "com.apple.periodic") || strings.Contains(msg, "cron") {
+			return event.SecurityEvent{}, false
+		}
 		baseEvt.EventType = event.LoginSuccess
 		baseEvt.Severity = event.SeverityCritical
 		baseEvt.Username = "macUser"
