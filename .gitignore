@@ -1,0 +1,29 @@
+# Binaries
+bin/
+lapdog
+*.exe
+*.exe.manifest
+*.dll
+*.so
+*.dylib
+
+# Local configuration and credentials
+config.yaml
+*.env
+
+# Local state database and persistent queues
+*.json
+*.tmp
+*.db
+lapdog_store.json
+
+# IDE & Editor files
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+
+# Go test outputs
+*.out
+*.test

@@ -1,0 +1,23 @@
+# lap-dog Configuration File
+
+# Telegram Bot Credentials (Get from @BotFather on Telegram)
+telegram_bot_token: "123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ"
+telegram_chat_id: 123456789
+
+# Polling Interval (in seconds) for Telegram commands (/away, /back, /status)
+poll_interval_seconds: 3
+
+# Agent & Device Settings
+device_id: "" # Auto-generated if left empty
+hostname: ""  # Auto-detected if left empty
+away_mode: true
+storage_path: "~/.lapdog/lapdog_store.json"
+log_level: "info"
+
+# Rule & Escalation Thresholds
+failed_login_threshold: 3
+failed_login_window_seconds: 120
+rate_limit_per_min: 5
+
+# Enable mock/simulator detector for testing without OS audit permissions
+mock_mode: false

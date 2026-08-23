@@ -1,0 +1,12 @@
+[Unit]
+Description=lap-dog Cross-Platform Laptop Security Agent
+After=network.target auditd.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/lapdog run --config %h/.lapdog/config.yaml
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
