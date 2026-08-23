@@ -89,13 +89,27 @@ WantedBy=%s
 		return nil
 
 	case "windows":
-		cmdStr := fmt.Sprintf("sc.exe create lapdog binPath= \"%s run --config %s\" start= auto", absExec, absCfg)
-		cmd := exec.Command("powershell", "-Command", cmdStr)
+		// Stop and clean up any legacy sc.exe service if present
+		_ = exec.Command("sc.exe", "stop", "lapdog").Run()
+		_ = exec.Command("sc.exe", "delete", "lapdog").Run()
+
+		trCmd := fmt.Sprintf(`"%s" run --config "%s"`, absExec, absCfg)
+		// Register task scheduler job that starts on logon automatically with highest available privileges
+		cmd := exec.Command("schtasks", "/Create", "/TN", "lapdog", "/TR", trCmd, "/SC", "ONLOGON", "/RL", "HIGHEST", "/F")
 		out, err := cmd.CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("failed to install Windows service: %w (%s)", err, string(out))
+			// If highest privilege fails (e.g. non-admin user), fallback to standard user level task
+			fallbackCmd := exec.Command("schtasks", "/Create", "/TN", "lapdog", "/TR", trCmd, "/SC", "ONLOGON", "/F")
+			fallbackOut, fallbackErr := fallbackCmd.CombinedOutput()
+			if fallbackErr != nil {
+				return fmt.Errorf("failed to register startup task in Windows Task Scheduler: %w (%s)", fallbackErr, string(fallbackOut))
+			}
 		}
-		fmt.Println("Windows service 'lapdog' created successfully. Run 'sc.exe start lapdog'")
+
+		// Run task immediately in background
+		_ = exec.Command("schtasks", "/Run", "/TN", "lapdog").Run()
+		fmt.Println("✓ Windows startup task 'lapdog' registered successfully in Task Scheduler.")
+		fmt.Println("  lap-dog is now running in the background and will start automatically on every boot/logon.")
 		return nil
 
 	default:
@@ -135,12 +149,15 @@ func ServiceUninstall() error {
 		fmt.Println("macOS LaunchAgent stopped and removed.")
 		return nil
 	case "windows":
+		// Stop and delete task scheduler job
+		_ = exec.Command("schtasks", "/End", "/TN", "lapdog").Run()
+		_ = exec.Command("schtasks", "/Delete", "/TN", "lapdog", "/F").Run()
+
+		// Also clean up any legacy sc.exe service
 		_ = exec.Command("sc.exe", "stop", "lapdog").Run()
-		out, err := exec.Command("sc.exe", "delete", "lapdog").CombinedOutput()
-		if err != nil && !strings.Contains(string(out), "1060") {
-			return fmt.Errorf("failed to delete Windows service: %w (%s)", err, string(out))
-		}
-		fmt.Println("Windows service 'lapdog' stopped and deleted.")
+		_ = exec.Command("sc.exe", "delete", "lapdog").Run()
+
+		fmt.Println("Windows background startup task 'lapdog' stopped and removed.")
 		return nil
 	default:
 		return fmt.Errorf("unsupported OS")

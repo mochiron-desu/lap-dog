@@ -57,8 +57,10 @@ If `lap-dog` is actively running as a background service, you **must restart the
   launchctl unload ~/Library/LaunchAgents/com.lapdog.agent.plist
   launchctl load ~/Library/LaunchAgents/com.lapdog.agent.plist
   ```
-- **Windows (PowerShell Admin)**:
+- **Windows (Task Scheduler / PowerShell)**:
   ```powershell
+  schtasks /Run /TN "lapdog"
+  # or if running as a Windows Service:
   Restart-Service lapdog
   ```
 - **Manual CLI Execution**: Press `Ctrl+C` to stop the daemon, then re-run `lapdog run`.

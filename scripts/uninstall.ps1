@@ -10,12 +10,14 @@ $ErrorActionPreference = "Continue"
 
 Write-Host "🐕 Uninstalling lap-dog Security Agent..." -ForegroundColor Cyan
 
-# 1. Stop and remove Windows Service
-Write-Host "⏳ Stopping and deleting Windows service..." -ForegroundColor Yellow
+# 1. Stop and remove Windows Service / Scheduled Task
+Write-Host "⏳ Stopping and deleting Windows background service / task..." -ForegroundColor Yellow
 try {
+    schtasks /End /TN "lapdog" 2>$null | Out-Null
+    schtasks /Delete /TN "lapdog" /F 2>$null | Out-Null
     sc.exe stop lapdog 2>$null | Out-Null
     sc.exe delete lapdog 2>$null | Out-Null
-    Write-Host "✓ Windows service 'lapdog' removed." -ForegroundColor Green
+    Write-Host "✓ Windows background service / task 'lapdog' removed." -ForegroundColor Green
 } catch {
     # Ignore if service wasn't installed
 }

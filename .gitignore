@@ -27,3 +27,7 @@ lapdog_store.json
 # Go test outputs
 *.out
 *.test
+
+# Release & Deployment documentation
+RELEASE_GUIDE.md
+
