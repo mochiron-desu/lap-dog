@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -70,6 +71,11 @@ func LoadConfig(path string) (*Config, error) {
 
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+	}
+
+	if strings.HasPrefix(cfg.StoragePath, "~/") {
+		home, _ := os.UserHomeDir()
+		cfg.StoragePath = filepath.Join(home, cfg.StoragePath[2:])
 	}
 
 	if cfg.DeviceID == "" {

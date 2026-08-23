@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"fmt"
@@ -8,6 +9,9 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -20,7 +24,11 @@ import (
 	"lap-dog/pkg/storage"
 )
 
-const Version = "v0.1.0"
+var (
+	version   = "v0.1.0"
+	commit    = "dev"
+	buildDate = "unknown"
+)
 
 func main() {
 	if len(os.Args) < 2 {
@@ -33,6 +41,13 @@ func main() {
 	defaultCfgPath := getDefaultConfigPath()
 
 	switch command {
+	case "setup":
+		setupCmd := flag.NewFlagSet("setup", flag.ExitOnError)
+		cfgPath := setupCmd.String("config", defaultCfgPath, "Path to configuration file")
+		_ = setupCmd.Parse(os.Args[2:])
+
+		runInteractiveSetup(*cfgPath)
+
 	case "run":
 		runCmd := flag.NewFlagSet("run", flag.ExitOnError)
 		cfgPath := runCmd.String("config", defaultCfgPath, "Path to configuration YAML file")
@@ -109,7 +124,7 @@ func main() {
 		}
 
 	case "version":
-		fmt.Printf("lap-dog version %s\n", Version)
+		fmt.Printf("lap-dog %s (commit: %s, built: %s, platform: %s/%s)\n", version, commit, buildDate, runtime.GOOS, runtime.GOARCH)
 
 	default:
 		printUsage()
@@ -126,19 +141,20 @@ func printUsage() {
 	fmt.Printf(`🐕 lap-dog Security Agent %s
 
 Usage:
-  lapdog run [--config config.yaml] [--mock]   Start background security monitoring daemon
-  lapdog away [--config config.yaml]          Arm Away Mode (alerts ON)
-  lapdog back [--config config.yaml]          Disarm Away Mode (suppress non-critical alerts)
-  lapdog status [--config config.yaml]        Display agent status and queue metrics
-  lapdog test [--config config.yaml]          Send a test Telegram alert
-  lapdog simulate [--event TYPE] [--user NAME] Inject a synthetic security event for testing
-  lapdog service [install|uninstall]          Manage system daemon service
-  lapdog version                              Show version info
-`, Version)
+  lapdog setup [--config config.yaml]        Run interactive configuration & service setup wizard
+  lapdog run [--config config.yaml] [--mock] Start background security monitoring daemon
+  lapdog away [--config config.yaml]         Arm Away Mode (alerts ON)
+  lapdog back [--config config.yaml]         Disarm Away Mode (suppress non-critical alerts)
+  lapdog status [--config config.yaml]       Display agent status and queue metrics
+  lapdog test [--config config.yaml]         Send a test Telegram alert
+  lapdog simulate [--event TYPE] [--user ...] Inject a synthetic security event for testing
+  lapdog service [install|uninstall]         Manage system daemon service
+  lapdog version                             Show version & build info
+`, version)
 }
 
 func runAgent(cfg *config.Config) {
-	log.Printf("[main] Initializing lap-dog agent %s (Host: %s, DeviceID: %s)", Version, cfg.Hostname, cfg.DeviceID)
+	log.Printf("[main] Initializing lap-dog agent %s (Host: %s, DeviceID: %s)", version, cfg.Hostname, cfg.DeviceID)
 
 	store, err := storage.NewStorage(cfg.StoragePath, cfg.AwayMode)
 	if err != nil {
@@ -227,9 +243,10 @@ func showStatus(cfgPath string) {
 	}
 
 	fmt.Printf("\n--- lap-dog Status Dashboard ---\n")
+	fmt.Printf("Version:        %s (commit: %s, built: %s)\n", version, commit, buildDate)
 	fmt.Printf("Hostname:       %s\n", cfg.Hostname)
 	fmt.Printf("Device ID:      %s\n", cfg.DeviceID)
-	fmt.Printf("Platform:       %s\n", cfg.Hostname)
+	fmt.Printf("Platform:       %s/%s\n", runtime.GOOS, runtime.GOARCH)
 	fmt.Printf("Away Mode:      %s\n", statusStr)
 	fmt.Printf("Pending Queue:  %d events\n", pending)
 	fmt.Printf("Sent History:   %d events\n", sent)
@@ -237,7 +254,7 @@ func showStatus(cfgPath string) {
 	if cfg.TelegramBotToken != "" {
 		fmt.Printf("Telegram Bot:   Configured (Chat ID: %d)\n", cfg.TelegramChatID)
 	} else {
-		fmt.Printf("Telegram Bot:   NOT CONFIGURED (Edit %s)\n", cfgPath)
+		fmt.Printf("Telegram Bot:   NOT CONFIGURED (Run 'lapdog setup' or edit %s)\n", cfgPath)
 	}
 	fmt.Println()
 }
@@ -296,3 +313,96 @@ func simulateEvent(cfgPath, evtTypeStr, username, sourceIP string) {
 		fmt.Printf("ℹ️ Simulated Event Processed -> No alert queued. (Reason: %s)\n", reason)
 	}
 }
+
+func runInteractiveSetup(cfgPath string) {
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Println("🐕 Welcome to lap-dog Setup Wizard")
+	fmt.Println("----------------------------------")
+	fmt.Printf("Config file: %s\n\n", cfgPath)
+
+	cfg, err := config.LoadConfig(cfgPath)
+	if err != nil {
+		log.Fatalf("Failed to load or create config: %v", err)
+	}
+
+	// 1. Telegram Bot Token
+	if cfg.TelegramBotToken != "" {
+		fmt.Printf("Telegram Bot Token [%s...]: ", cfg.TelegramBotToken[:min(len(cfg.TelegramBotToken), 8)])
+	} else {
+		fmt.Print("Telegram Bot Token (from @BotFather): ")
+	}
+	tokenInput, _ := reader.ReadString('\n')
+	tokenInput = strings.TrimSpace(tokenInput)
+	if tokenInput != "" {
+		cfg.TelegramBotToken = tokenInput
+	}
+
+	// 2. Telegram Chat ID
+	if cfg.TelegramChatID != 0 {
+		fmt.Printf("Telegram Chat ID [%d]: ", cfg.TelegramChatID)
+	} else {
+		fmt.Print("Telegram Chat ID: ")
+	}
+	chatIDInput, _ := reader.ReadString('\n')
+	chatIDInput = strings.TrimSpace(chatIDInput)
+	if chatIDInput != "" {
+		if id, parseErr := strconv.ParseInt(chatIDInput, 10, 64); parseErr == nil {
+			cfg.TelegramChatID = id
+		} else {
+			fmt.Printf("⚠️ Invalid Chat ID format '%s'. Keeping previous value.\n", chatIDInput)
+		}
+	}
+
+	// 3. Away Mode Preference
+	fmt.Print("Enable Away Mode by default? (Y/n): ")
+	awayInput, _ := reader.ReadString('\n')
+	awayInput = strings.TrimSpace(strings.ToLower(awayInput))
+	if awayInput == "n" || awayInput == "no" {
+		cfg.AwayMode = false
+	} else {
+		cfg.AwayMode = true
+	}
+
+	// Save configuration
+	if err := config.SaveConfig(cfgPath, cfg); err != nil {
+		log.Fatalf("Failed to save config: %v", err)
+	}
+	fmt.Println("\n✓ Configuration saved successfully!")
+
+	// 4. Install Background Service
+	fmt.Print("Install lap-dog as a background startup service? (Y/n): ")
+	svcInput, _ := reader.ReadString('\n')
+	svcInput = strings.TrimSpace(strings.ToLower(svcInput))
+	if svcInput != "n" && svcInput != "no" {
+		execPath, err := os.Executable()
+		if err == nil {
+			if err := service.ServiceInstall(execPath, cfgPath); err != nil {
+				fmt.Printf("⚠️ Background service installation encountered an issue: %v\n", err)
+			} else {
+				fmt.Println("✓ Background service installed successfully!")
+			}
+		}
+	}
+
+	// 5. Send Test Alert if configured
+	if cfg.TelegramBotToken != "" && cfg.TelegramChatID != 0 {
+		fmt.Print("Send a test alert to Telegram right now? (Y/n): ")
+		testInput, _ := reader.ReadString('\n')
+		testInput = strings.TrimSpace(strings.ToLower(testInput))
+		if testInput != "n" && testInput != "no" {
+			sendTestAlert(cfgPath)
+		}
+	}
+
+	fmt.Println("\n🐕 lap-dog setup complete!")
+	fmt.Println("Run 'lapdog status' to inspect system status.")
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+

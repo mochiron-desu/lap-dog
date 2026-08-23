@@ -1,17 +1,84 @@
 # lap-dog: Cross-Platform Laptop Security Agent 🐕
 
-**lap-dog** is a lightweight, cross-platform background security agent written in Go. It monitors laptop authentication and access events (logins, unlock attempts, remote sessions, USB insertions) across **Windows**, **Linux**, and **macOS**, sending instant alerts and interactive controls via a Telegram bot !
+**lap-dog** is a lightweight, cross-platform background security agent written in Go. It monitors laptop authentication and access events (logins, unlock attempts, remote sessions, USB insertions) across **Linux**, **Windows**, and **macOS**, sending instant alerts and interactive controls via a Telegram bot.
 
 ---
 
-## 🌟 Features
+## 🚀 Quick Start (No Compiler Required)
+
+Install `lap-dog` instantly using zero-dependency prebuilt binaries from GitHub Releases:
+
+### 🐧 Linux & 🍎 macOS
+```bash
+curl -fsSL https://raw.githubusercontent.com/mochiron-desu/lap-dog/main/scripts/install.sh | bash
+```
+
+### 🪟 Windows (PowerShell)
+```powershell
+irm https://raw.githubusercontent.com/mochiron-desu/lap-dog/main/scripts/install.ps1 | iex
+```
+
+### 🧙‍♂️ Interactive Setup
+Once installed, run the setup wizard to link your Telegram bot and enable auto-start in under 30 seconds:
+```bash
+lapdog setup
+```
+
+---
+
+## ⚙️ Updating Configuration in the Future
+
+If you ever need to update your **Telegram Bot Token**, **Chat ID**, **thresholds**, or **Away Mode preferences** later on:
+
+### Option 1: Re-run Interactive Setup (Recommended)
+Run the setup wizard anytime to interactively modify settings:
+```bash
+lapdog setup
+```
+
+### Option 2: Direct Configuration File Edit
+You can directly edit `config.yaml` using any text editor:
+- **Linux & macOS**: `nano ~/.lapdog/config.yaml`
+- **Windows**: `notepad $env:USERPROFILE\.lapdog\config.yaml`
+
+### 🔄 Restarting the Daemon After Configuration Changes
+If `lap-dog` is actively running as a background service, you **must restart the service** for new settings to take effect:
+
+- **Linux (systemd User Service)**:
+  ```bash
+  systemctl --user restart lapdog
+  ```
+- **Linux (systemd System Service)**:
+  ```bash
+  sudo systemctl restart lapdog
+  ```
+- **macOS (launchd)**:
+  ```bash
+  launchctl unload ~/Library/LaunchAgents/com.lapdog.agent.plist
+  launchctl load ~/Library/LaunchAgents/com.lapdog.agent.plist
+  ```
+- **Windows (PowerShell Admin)**:
+  ```powershell
+  Restart-Service lapdog
+  ```
+- **Manual CLI Execution**: Press `Ctrl+C` to stop the daemon, then re-run `lapdog run`.
+
+### 🧪 Verify Updated Configuration
+After restarting, confirm your changes and test alert delivery:
+```bash
+lapdog status
+lapdog test
+```
+
+---
+
+## 🌟 Key Features
 
 - **Cross-Platform Event Sources**:
-  - **Linux**: systemd-journald (`journalctl`), PAM logs (`/var/log/auth.log`), SSH logins, lock/unlock events.
+  - **Linux**: systemd-journald (`journalctl`), PAM authentication logs (`/var/log/auth.log`), SSH logins, lock/unlock events.
   - **Windows**: Windows Security Event Log (ETW/PowerShell 4624 login, 4625 failed login, 4800/4801 lock/unlock, 4778 RDP session).
   - **macOS**: Unified Logging (`os_log` stream for `loginwindow`, `sshd`, `sudo`, `authorizationd`).
-  - **Mock Simulator**: Built-in test event generator for unprivileged testing.
-- **Event Normalization**: All native logs map to standard `SecurityEvent` schema (`LOGIN_SUCCESS`, `LOGIN_FAILURE`, `UNLOCK`, `REMOTE_LOGIN`, `USB_INSERT`).
+  - **Mock Simulator**: Built-in test event generator for unprivileged testing (`lapdog run --mock`).
 - **Rule & Escalation Engine**:
   - **Away Mode Toggle**: Suppresses non-critical alerts when user is at the machine; fires alerts when Away Mode is ARMED.
   - **Brute Force Escalation**: Automatically escalates multiple failed logins in a short window to `CRITICAL` severity.
@@ -24,62 +91,62 @@
 
 ---
 
-## 🚀 Quick Start & Setup Guide
+## 📦 Prebuilt Release Binaries & Supply Chain Verification
 
-### 1. Build from Source
-```bash
-export PATH=$PATH:$HOME/.local/go/bin
-make build
-# Binary created at bin/lapdog
-```
+Every tag release (`v*`) automatically builds and publishes static binaries for 6 platform architectures:
 
-### 2. Configure Telegram Credentials
-1. Open Telegram and search for `@BotFather`.
-2. Send `/newbot`, follow prompts, and copy the **HTTP API Token**.
-3. Search for your new bot in Telegram and click **START** (or send `/start`).
-4. Search for `@userinfobot` to get your Telegram **Chat ID**.
-5. Copy default config and edit:
-```bash
-mkdir -p ~/.lapdog
-cp config.example.yaml ~/.lapdog/config.yaml
-nano ~/.lapdog/config.yaml
-```
-Set `telegram_bot_token` and `telegram_chat_id`.
+| Operating System | Architecture | Binary Asset Name |
+| :--- | :--- | :--- |
+| **Linux** | x86_64 / amd64 | `lapdog-linux-amd64` |
+| **Linux** | ARM64 / aarch64 | `lapdog-linux-arm64` |
+| **Windows** | x86_64 / amd64 | `lapdog-windows-amd64.exe` |
+| **Windows** | ARM64 | `lapdog-windows-arm64.exe` |
+| **macOS** | Intel (amd64) | `lapdog-darwin-amd64` |
+| **macOS** | Apple Silicon (arm64) | `lapdog-darwin-arm64` |
 
-### 3. Linux Permissions & Security (Least Privilege)
-To allow `lap-dog` to monitor Linux authentication logs **without needing `sudo` or root privileges**:
-```bash
-sudo usermod -aG systemd-journal,adm $USER
-```
-*(Log out and back in for group permissions to take effect).*
+### 🔒 Verify Checksums
+All releases include a signed/hashed `checksums.txt` file. You can verify your downloaded binary manually:
 
-### 4. Test Notification
 ```bash
-./bin/lapdog test
-./bin/lapdog run --mock
-```
+# Linux
+sha256sum -c checksums.txt --ignore-missing
 
-### 5. Install Background Service (Auto-Start on Boot)
-```bash
-./bin/lapdog service install
-systemctl --user enable --now lapdog
+# macOS
+shasum -a 256 -c checksums.txt
+
+# Windows PowerShell
+Get-FileHash -Path lapdog-windows-amd64.exe -Algorithm SHA256
 ```
 
 ---
 
-## 🛠️ CLI Commands
+## 🍏 Note for macOS Users
+
+On macOS, downloading unsigned binaries directly from GitHub may trigger Apple Gatekeeper warnings on first execution (*"Apple cannot verify that 'lapdog' is free of malware"*).
+
+To allow execution on macOS:
+```bash
+# Remove quarantine attribute on downloaded binary
+xattr -d com.apple.quarantine lapdog-darwin-arm64  # or lapdog-darwin-amd64
+```
+Alternatively, go to **System Settings > Privacy & Security** and click **"Allow Anyway"**.
+
+---
+
+## 🛠️ CLI Commands Reference
 
 | Command | Description |
 | :--- | :--- |
+| `lapdog setup` | Interactive wizard for Telegram bot token, chat ID, and background service setup |
 | `lapdog run` | Starts the security daemon (use `--mock` for simulator mode) |
 | `lapdog away` | Arms Away Mode (alerts enabled for access events) |
 | `lapdog back` | Disarms Away Mode (suppresses non-critical alerts) |
-| `lapdog status` | Displays dashboard status and queue metrics |
+| `lapdog status` | Displays dashboard status, version build metadata, and queue metrics |
 | `lapdog test` | Enqueues and sends a test alert notification |
 | `lapdog simulate` | Injects synthetic test events (`--event LOGIN_FAILURE --user attacker`) |
-| `lapdog service install` | Registers lap-dog as a background system service |
-| `lapdog service uninstall` | Unregisters system service |
-| `lapdog version` | Shows version information |
+| `lapdog service install` | Registers lap-dog as a background system service (systemd / launchd / Windows Service) |
+| `lapdog service uninstall` | Unregisters background system service |
+| `lapdog version` | Displays version, commit hash, build date, and platform architecture |
 
 ---
 
@@ -97,31 +164,26 @@ Send commands directly to your Telegram bot:
 ## 🔒 Security Architecture & Least Privilege
 
 `lap-dog` is built with a zero-trust, privacy-focused security model:
-1. **No Root Requirement**: Uses Linux `systemd-journal` group permissions to read authentication events without granting full root/sudo access.
+1. **No Root Requirement**: Uses Linux `systemd-journal` group permissions to read authentication events without granting full root/sudo access:
+   ```bash
+   sudo usermod -aG systemd-journal,adm $USER
+   ```
 2. **Systemd Sandboxing**: The installed systemd unit uses `NoNewPrivileges=true` and `ProtectSystem=strict` to prevent process privilege escalation or unauthorized file modifications.
-3. **100% Open Source**: Written in pure Go with **zero CGO dependencies** and no dynamic binary blobs.
+3. **100% Open Source**: Written in pure Go with **zero CGO dependencies** and static compilation.
 
 ---
 
-## 📦 Building Cross-Platform Release Binaries
+## 💻 Developer Guide (Building from Source)
 
-To cross-compile binaries for all supported platforms without CGO dependencies:
+If you have Go 1.24+ installed and wish to build locally:
+
 ```bash
-make cross-build
-```
+# Local build
+make build
 
-Generated binaries in `bin/`:
-- `lapdog-linux-amd64`
-- `lapdog-linux-arm64`
-- `lapdog-windows-amd64.exe`
-- `lapdog-darwin-amd64`
-- `lapdog-darwin-arm64`
+# Build cross-platform matrix & generate checksums
+make checksums
 
----
-
-## 🧪 Testing
-
-Run the full Go unit test suite:
-```bash
+# Run tests
 make test
 ```
