@@ -1,4 +1,4 @@
-.PHONY: all build test clean cross-build checksums install
+.PHONY: all build test clean cross-build checksums install uninstall
 
 GO ?= $(shell command -v go 2>/dev/null || echo $(HOME)/.local/go/bin/go)
 BINARY_NAME=lapdog
@@ -36,4 +36,8 @@ checksums: cross-build
 
 install: build
 	./scripts/install.sh
+
+uninstall:
+	./scripts/uninstall.sh
+
 

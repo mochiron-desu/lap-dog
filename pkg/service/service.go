@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 func ServiceInstall(execPath, cfgPath string) error {
@@ -105,24 +106,41 @@ WantedBy=%s
 func ServiceUninstall() error {
 	switch runtime.GOOS {
 	case "linux":
-		_ = os.Remove("/etc/systemd/system/lapdog.service")
+		// Stop and disable user service if present
+		_ = exec.Command("systemctl", "--user", "stop", "lapdog").Run()
+		_ = exec.Command("systemctl", "--user", "disable", "lapdog").Run()
 		home, _ := os.UserHomeDir()
-		_ = os.Remove(filepath.Join(home, ".config", "systemd", "user", "lapdog.service"))
-		fmt.Println("Systemd service files removed.")
+		userUnit := filepath.Join(home, ".config", "systemd", "user", "lapdog.service")
+		if _, err := os.Stat(userUnit); err == nil {
+			_ = os.Remove(userUnit)
+			_ = exec.Command("systemctl", "--user", "daemon-reload").Run()
+		}
+
+		// Stop and disable system service if present
+		_ = exec.Command("systemctl", "stop", "lapdog").Run()
+		_ = exec.Command("systemctl", "disable", "lapdog").Run()
+		sysUnit := "/etc/systemd/system/lapdog.service"
+		if _, err := os.Stat(sysUnit); err == nil {
+			_ = os.Remove(sysUnit)
+			_ = exec.Command("systemctl", "daemon-reload").Run()
+		}
+
+		fmt.Println("Systemd service stopped and unit files removed.")
 		return nil
 	case "darwin":
 		home, _ := os.UserHomeDir()
 		plistPath := filepath.Join(home, "Library", "LaunchAgents", "com.lapdog.agent.plist")
 		_ = exec.Command("launchctl", "unload", plistPath).Run()
 		_ = os.Remove(plistPath)
-		fmt.Println("LaunchAgent removed.")
+		fmt.Println("macOS LaunchAgent stopped and removed.")
 		return nil
 	case "windows":
+		_ = exec.Command("sc.exe", "stop", "lapdog").Run()
 		out, err := exec.Command("sc.exe", "delete", "lapdog").CombinedOutput()
-		if err != nil {
+		if err != nil && !strings.Contains(string(out), "1060") {
 			return fmt.Errorf("failed to delete Windows service: %w (%s)", err, string(out))
 		}
-		fmt.Println("Windows service 'lapdog' deleted.")
+		fmt.Println("Windows service 'lapdog' stopped and deleted.")
 		return nil
 	default:
 		return fmt.Errorf("unsupported OS")

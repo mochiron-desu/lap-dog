@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
@@ -123,6 +124,14 @@ func main() {
 			fmt.Printf("Unknown service command: %s\n", subCmd)
 		}
 
+	case "uninstall":
+		uninstCmd := flag.NewFlagSet("uninstall", flag.ExitOnError)
+		purgeFlag := uninstCmd.Bool("purge", false, "Purge configuration and storage files (~/.lapdog)")
+		forceFlag := uninstCmd.Bool("force", false, "Non-interactive mode (force without prompting)")
+		_ = uninstCmd.Parse(os.Args[2:])
+
+		runUninstall(*purgeFlag, *forceFlag)
+
 	case "version":
 		fmt.Printf("lap-dog %s (commit: %s, built: %s, platform: %s/%s)\n", version, commit, buildDate, runtime.GOOS, runtime.GOARCH)
 
@@ -149,6 +158,7 @@ Usage:
   lapdog test [--config config.yaml]         Send a test Telegram alert
   lapdog simulate [--event TYPE] [--user ...] Inject a synthetic security event for testing
   lapdog service [install|uninstall]         Manage system daemon service
+  lapdog uninstall [--purge] [--force]       Uninstall lap-dog and remove service/binary
   lapdog version                             Show version & build info
 `, version)
 }
@@ -404,5 +414,58 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func runUninstall(purge, force bool) {
+	fmt.Println("🐕 Uninstalling lap-dog Security Agent...")
+
+	// 1. Teardown background service
+	fmt.Println("⏳ Stopping and removing background service...")
+	if err := service.ServiceUninstall(); err != nil {
+		fmt.Printf("⚠️ Warning during service removal: %v\n", err)
+	}
+
+	// 2. Prompt for configuration purge if not specified by flags and interactive
+	shouldPurge := purge
+	if !purge && !force {
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Print("Do you also want to remove configuration and data store in ~/.lapdog? (y/N): ")
+		answer, _ := reader.ReadString('\n')
+		answer = strings.TrimSpace(strings.ToLower(answer))
+		if answer == "y" || answer == "yes" {
+			shouldPurge = true
+		}
+	}
+
+	if shouldPurge {
+		home, _ := os.UserHomeDir()
+		cfgDir := filepath.Join(home, ".lapdog")
+		if err := os.RemoveAll(cfgDir); err != nil {
+			fmt.Printf("⚠️ Warning: Failed to remove config directory %s: %v\n", cfgDir, err)
+		} else {
+			fmt.Printf("✓ Removed configuration directory %s\n", cfgDir)
+		}
+	}
+
+	// 3. Remove binary self executable
+	execPath, err := os.Executable()
+	if err == nil {
+		execPath, _ = filepath.Abs(execPath)
+		fmt.Printf("⏳ Removing binary executable: %s...\n", execPath)
+
+		if runtime.GOOS == "windows" {
+			cmdStr := fmt.Sprintf("start /b cmd /c \"timeout /t 1 /nobreak >NUL & del /f /q \"%s\"\"", execPath)
+			_ = exec.Command("cmd", "/c", cmdStr).Start()
+			fmt.Println("✓ Windows binary removal scheduled.")
+		} else {
+			if removeErr := os.Remove(execPath); removeErr != nil {
+				fmt.Printf("⚠️ Warning: Could not remove binary %s: %v\n", execPath, removeErr)
+			} else {
+				fmt.Println("✓ Removed binary executable.")
+			}
+		}
+	}
+
+	fmt.Println("\n✅ lap-dog has been uninstalled successfully.")
 }
 

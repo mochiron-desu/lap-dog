@@ -146,7 +146,41 @@ Alternatively, go to **System Settings > Privacy & Security** and click **"Allow
 | `lapdog simulate` | Injects synthetic test events (`--event LOGIN_FAILURE --user attacker`) |
 | `lapdog service install` | Registers lap-dog as a background system service (systemd / launchd / Windows Service) |
 | `lapdog service uninstall` | Unregisters background system service |
+| `lapdog uninstall` | Uninstalls lap-dog, stops background service, and removes binary (`--purge` removes `~/.lapdog`) |
 | `lapdog version` | Displays version, commit hash, build date, and platform architecture |
+
+---
+
+## 🗑️ Uninstalling lap-dog
+
+To completely uninstall `lap-dog`, stop its background service, and remove the binary executable:
+
+### Option 1: Built-in CLI Command
+```bash
+# Uninstall lap-dog service and binary
+lapdog uninstall
+
+# Or uninstall and purge configuration & stored database state (~/.lapdog)
+lapdog uninstall --purge
+```
+
+### Option 2: One-Line Uninstall Script
+- **Linux & macOS**:
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/mochiron-desu/lap-dog/main/scripts/uninstall.sh | bash
+  ```
+  *(Add `--purge` to script arguments to also remove config & database history)*
+
+- **Windows (PowerShell)**:
+  ```powershell
+  irm https://raw.githubusercontent.com/mochiron-desu/lap-dog/main/scripts/uninstall.ps1 | iex
+  ```
+  *(Pass `-Purge` parameter to also remove config & database history)*
+
+### Option 3: From Source (Makefile)
+```bash
+make uninstall
+```
 
 ---
 
