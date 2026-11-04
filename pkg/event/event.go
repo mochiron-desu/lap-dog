@@ -107,8 +107,13 @@ func (e *SecurityEvent) FormatTelegramHTML() string {
 	msg += fmt.Sprintf("<b>Severity:</b> %s\n", e.Severity)
 	msg += fmt.Sprintf("<b>Time:</b> %s\n", timeStr)
 
+	explanation := e.HumanExplanation()
+	if explanation != "" {
+		msg += fmt.Sprintf("\n💡 <b>What happened:</b> %s\n", escapeHTML(explanation))
+	}
+
 	if e.Details != "" {
-		msg += fmt.Sprintf("\n<b>Details:</b> %s", escapeHTML(e.Details))
+		msg += fmt.Sprintf("🔍 <b>System Log:</b> <code>%s</code>", escapeHTML(e.Details))
 	}
 
 	return msg

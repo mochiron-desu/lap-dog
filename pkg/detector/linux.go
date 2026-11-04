@@ -211,7 +211,14 @@ func (l *LinuxDetector) parseJournalEntry(entry *JournalEntry) (event.SecurityEv
 	// 6. Screen Unlock
 	if reUnlock.MatchString(msg) {
 		baseEvt.EventType = event.Unlock
-		baseEvt.Username = "user"
+		user := os.Getenv("USER")
+		if user == "" {
+			user = os.Getenv("LOGNAME")
+		}
+		if user == "" {
+			user = "user"
+		}
+		baseEvt.Username = user
 		baseEvt.Source = "DisplayManager"
 		baseEvt.Severity = event.SeverityCritical
 		baseEvt.Details = msg
