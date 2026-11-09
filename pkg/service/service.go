@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+
+	"lap-dog/pkg/osutil"
 )
 
 func ServiceInstall(execPath, cfgPath string) error {
@@ -94,21 +96,12 @@ WantedBy=%s
 		_ = exec.Command("sc.exe", "stop", "lapdog").Run()
 		_ = exec.Command("sc.exe", "delete", "lapdog").Run()
 
-		// Create silent background launcher script (lapdog_bg.vbs)
+		// Clean up any legacy VBS launcher script from previous versions
 		cfgDir := filepath.Dir(absCfg)
-		_ = os.MkdirAll(cfgDir, 0755)
-		vbsPath := filepath.Join(cfgDir, "lapdog_bg.vbs")
+		legacyVbs := filepath.Join(cfgDir, "lapdog_bg.vbs")
+		_ = os.Remove(legacyVbs)
 
-		vbsContent := fmt.Sprintf(`' lap-dog Windows Silent Background Launcher
-Set WshShell = CreateObject("WScript.Shell")
-WshShell.Run """%s"" run --config ""%s"" --background", 0, False
-`, absExec, absCfg)
-
-		if err := os.WriteFile(vbsPath, []byte(vbsContent), 0644); err != nil {
-			return fmt.Errorf("failed to write background launcher script: %w", err)
-		}
-
-		trCmd := fmt.Sprintf(`wscript.exe "%s"`, vbsPath)
+		trCmd := fmt.Sprintf(`"%s" run --config "%s" --background`, absExec, absCfg)
 		methodUsed := "Windows Task Scheduler"
 
 		// Try registering task scheduler job that starts on logon automatically
@@ -125,8 +118,12 @@ WshShell.Run """%s"" run --config ""%s"" --background", 0, False
 			}
 		}
 
-		// Run background launcher immediately via wscript.exe
-		_ = exec.Command("wscript.exe", "//B", vbsPath).Start()
+		// Run background agent directly (without VBScript/wscript)
+		startCmd := exec.Command(absExec, "run", "--config", absCfg, "--background")
+		osutil.PrepareSilentCommand(startCmd)
+		if err := startCmd.Start(); err != nil {
+			_ = exec.Command("schtasks", "/Run", "/TN", "lapdog").Run()
+		}
 		fmt.Printf("✓ Windows silent background startup task 'lapdog' registered successfully via %s.\n", methodUsed)
 		fmt.Println("  lap-dog is now running silently in the background (no console window).")
 		return nil

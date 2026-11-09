@@ -1,4 +1,4 @@
-# lap-dog Security Agent Windows PowerShell Uninstaller
+﻿# lap-dog Security Agent Windows PowerShell Uninstaller
 # Usage: irm https://raw.githubusercontent.com/mochiron-desu/lap-dog/main/scripts/uninstall.ps1 | iex
 
 param (
@@ -18,6 +18,7 @@ try {
     Stop-Process -Name "lapdog" -Force -ErrorAction SilentlyContinue
     sc.exe stop lapdog 2>$null | Out-Null
     sc.exe delete lapdog 2>$null | Out-Null
+    Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "lapdog" -ErrorAction SilentlyContinue 2>$null
     $VbsLauncher = Join-Path $ConfigDir "lapdog_bg.vbs"
     if (Test-Path $VbsLauncher) { Remove-Item -Path $VbsLauncher -Force 2>$null }
     Write-Host "✓ Windows background service / task 'lapdog' removed." -ForegroundColor Green
