@@ -26,5 +26,5 @@ mock_mode: false
 # Captures a photo locally, saves it temporarily, and sends it via Telegram.
 # If an antivirus, OS permission check, or busy camera blocks capture,
 # lap-dog gracefully falls back and informs you of the exact reason on Telegram.
-webcam_capture_enabled: true
+webcam_capture_enabled: false
 webcam_capture_dir: "~/.lapdog/captures"

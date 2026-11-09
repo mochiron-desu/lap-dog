@@ -88,6 +88,7 @@ failed_login_threshold: 3
 failed_login_window_seconds: 120
 rate_limit_per_min: 5
 mock_mode: false
+webcam_capture_enabled: false
 "@
     Set-Content -Path $ConfigFile -Value $DefaultConfig -Encoding UTF8
     Write-Host "📋 Created default configuration at $ConfigFile" -ForegroundColor Green

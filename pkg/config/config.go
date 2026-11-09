@@ -54,7 +54,7 @@ func DefaultConfig() *Config {
 		FailedLoginWindowSec: 120, // 2 minutes
 		RateLimitPerMin:      5,
 		MockMode:             false,
-		WebcamCaptureEnabled: true,
+		WebcamCaptureEnabled: false,
 		WebcamCaptureDir:     defaultCaptures,
 	}
 }

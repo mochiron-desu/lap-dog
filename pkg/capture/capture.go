@@ -205,6 +205,7 @@ func captureWindows(ctx context.Context, outputPath string) (string, error) {
 	if err == nil {
 		cmd := exec.CommandContext(ctx, ffmpegPath,
 			"-nostdin", "-y",
+			"-t", "1",
 			"-f", "dshow",
 			"-i", "video=Integrated Camera",
 			"-update", "1",
@@ -214,7 +215,11 @@ func captureWindows(ctx context.Context, outputPath string) (string, error) {
 		osutil.PrepareSilentCommand(cmd)
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
-		if runErr := cmd.Run(); runErr == nil {
+		runErr := cmd.Run()
+		if ctx.Err() != nil && cmd.Process != nil {
+			_ = exec.Command("taskkill", "/F", "/T", "/PID", fmt.Sprintf("%d", cmd.Process.Pid)).Run()
+		}
+		if runErr == nil {
 			return stderr.String(), nil
 		} else {
 			return stderr.String(), runErr
