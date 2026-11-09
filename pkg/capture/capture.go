@@ -186,8 +186,23 @@ func captureDarwin(ctx context.Context, outputPath string) (string, error) {
 }
 
 func captureWindows(ctx context.Context, outputPath string) (string, error) {
-	// 1. Check ffmpeg with dshow
-	if ffmpegPath, err := exec.LookPath("ffmpeg"); err == nil {
+	ffmpegPath, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		commonPaths := []string{
+			`C:\ffmpeg\bin\ffmpeg.exe`,
+			filepath.Join(os.Getenv("ProgramFiles"), "ffmpeg", "bin", "ffmpeg.exe"),
+			filepath.Join(os.Getenv("LOCALAPPDATA"), "Microsoft", "WinGet", "Links", "ffmpeg.exe"),
+		}
+		for _, p := range commonPaths {
+			if _, statErr := os.Stat(p); statErr == nil {
+				ffmpegPath = p
+				err = nil
+				break
+			}
+		}
+	}
+
+	if err == nil {
 		cmd := exec.CommandContext(ctx, ffmpegPath,
 			"-nostdin", "-y",
 			"-f", "dshow",
@@ -199,27 +214,14 @@ func captureWindows(ctx context.Context, outputPath string) (string, error) {
 		osutil.PrepareSilentCommand(cmd)
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
-		if err := cmd.Run(); err == nil {
+		if runErr := cmd.Run(); runErr == nil {
 			return stderr.String(), nil
+		} else {
+			return stderr.String(), runErr
 		}
 	}
 
-	// 2. PowerShell Windows.Media.Capture fallback
-	psScript := fmt.Sprintf(`
-Add-Type -AssemblyName System.Drawing
-[Windows.Media.Capture.MediaCapture, Windows.Media.Capture, ContentType=WindowsRuntime] | Out-Null
-$cap = [Windows.Media.Capture.MediaCapture]::new()
-$settings = [Windows.Media.Capture.MediaCaptureInitializationSettings]::new()
-$cap.InitializeAsync($settings).AsTask().Wait()
-$storageFile = [Windows.Storage.StorageFile]::GetFileFromPathAsync("%s").AsTask().Result
-`, outputPath)
-
-	cmd := exec.CommandContext(ctx, "powershell", "-NoProfile", "-NonInteractive", "-Command", psScript)
-	osutil.PrepareSilentCommand(cmd)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	return stderr.String(), err
+	return "", errors.New("no capture utility found (ffmpeg required on Windows)")
 }
 
 // CategorizeCaptureError evaluates errors and stderr output to provide clear diagnostic messages
