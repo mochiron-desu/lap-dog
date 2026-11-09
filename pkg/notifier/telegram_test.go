@@ -42,6 +42,17 @@ func TestTelegramNotifierSendAndPoll(t *testing.T) {
 			return
 		}
 
+		if r.URL.Path == "/botTEST_TOKEN/sendPhoto" {
+			err := r.ParseMultipartForm(10 << 20)
+			if err == nil {
+				caption := r.FormValue("caption")
+				receivedMessages = append(receivedMessages, "PHOTO:"+caption)
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"ok": true}`))
+			return
+		}
+
 		if r.URL.Path == "/botTEST_TOKEN/getUpdates" {
 			// Mock command response for /away
 			resp := TelegramGetUpdatesResp{
@@ -125,5 +136,33 @@ func TestTelegramNotifierSendAndPoll(t *testing.T) {
 	notifier.SetVersion("v0.1.0")
 	if notifier.version != "v0.1.0" {
 		t.Errorf("expected version v0.1.0, got %s", notifier.version)
+	}
+
+	// 7. Test Queue Dispatcher with Photo and File Cleanup
+	photoFile := filepath.Join(tempDir, "test_snap_queue.jpg")
+	if err := os.WriteFile(photoFile, []byte("fake image data"), 0600); err != nil {
+		t.Fatalf("failed to write test photo: %v", err)
+	}
+
+	photoEvt := event.SecurityEvent{
+		ID:           "evt-photo-test",
+		Timestamp:    time.Now(),
+		EventType:    event.LoginFailure,
+		Username:     "alice",
+		ImagePath:    photoFile,
+		WebcamStatus: "Webcam snapshot captured successfully",
+	}
+	_ = store.Enqueue(photoEvt)
+
+	// Wait for queue dispatch to process photo
+	time.Sleep(1 * time.Second)
+
+	if store.QueueSize() != 0 {
+		t.Errorf("expected photo event to be dispatched, got queue size %d", store.QueueSize())
+	}
+
+	// Verify temporary file was deleted after successful delivery
+	if _, err := os.Stat(photoFile); !os.IsNotExist(err) {
+		t.Errorf("expected temporary photo file to be deleted after dispatch, but it still exists")
 	}
 }

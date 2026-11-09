@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"lap-dog/pkg/capture"
 	"lap-dog/pkg/config"
 	"lap-dog/pkg/event"
 	"lap-dog/pkg/storage"
@@ -18,26 +19,39 @@ type Engine struct {
 	recentFails  []time.Time
 	rateWindow   []time.Time
 	mu           sync.Mutex
+	capturer     capture.Capturer
 }
 
 func NewEngine(cfg *config.Config, store *storage.Storage) *Engine {
+	var capDev capture.Capturer
+	if cfg != nil {
+		capDev = capture.NewWebcamCapturer(cfg.WebcamCaptureDir, cfg.WebcamCaptureEnabled)
+	}
 	return &Engine{
 		cfg:         cfg,
 		store:       store,
 		recentFails: make([]time.Time, 0),
 		rateWindow:  make([]time.Time, 0),
+		capturer:    capDev,
 	}
+}
+
+// SetCapturer allows injecting a custom or mock capturer (useful for tests)
+func (e *Engine) SetCapturer(c capture.Capturer) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.capturer = c
 }
 
 func (e *Engine) ProcessEvent(evt event.SecurityEvent) (bool, string) {
 	e.mu.Lock()
-	defer e.mu.Unlock()
 
 	awayMode := e.store.GetAwayMode()
 
 	// 1. Deduplication check
 	fp := evt.Fingerprint()
 	if e.store.IsDuplicate(fp, 1*time.Minute) {
+		e.mu.Unlock()
 		return false, "duplicate event within deduplication window"
 	}
 
@@ -53,6 +67,7 @@ func (e *Engine) ProcessEvent(evt event.SecurityEvent) (bool, string) {
 	e.rateWindow = validRate
 
 	if len(e.rateWindow) >= e.cfg.RateLimitPerMin {
+		e.mu.Unlock()
 		return false, fmt.Sprintf("rate limit exceeded (%d alerts in last minute)", e.cfg.RateLimitPerMin)
 	}
 
@@ -66,6 +81,7 @@ func (e *Engine) ProcessEvent(evt event.SecurityEvent) (bool, string) {
 			shouldAlert = true
 			alertReason = "High severity event while active"
 		} else {
+			e.mu.Unlock()
 			return false, "suppressed: away mode is OFF (user present)"
 		}
 	} else {
@@ -118,6 +134,23 @@ func (e *Engine) ProcessEvent(evt event.SecurityEvent) (bool, string) {
 
 	if shouldAlert {
 		e.rateWindow = append(e.rateWindow, now)
+	}
+	capturer := e.capturer
+	e.mu.Unlock()
+
+	if shouldAlert {
+		// Webcam snapshot on failed attempts
+		if evt.EventType == event.LoginFailure && capturer != nil {
+			img, status, err := capturer.Capture(context.Background(), evt.Fingerprint())
+			evt.ImagePath = img
+			evt.WebcamStatus = status
+			if err != nil {
+				log.Printf("[Engine] Webcam capture fallback for %s: %s (err: %v)", evt.ID, status, err)
+			} else if img != "" {
+				log.Printf("[Engine] Webcam snapshot captured for %s: %s", evt.ID, img)
+			}
+		}
+
 		if err := e.store.Enqueue(evt); err != nil {
 			log.Printf("[Engine] error enqueuing alert: %v", err)
 			return false, fmt.Sprintf("failed to enqueue: %v", err)

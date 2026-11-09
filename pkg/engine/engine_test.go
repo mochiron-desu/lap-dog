@@ -1,8 +1,11 @@
 package engine
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -27,6 +30,7 @@ func TestEngineAwayRulesAndEscalation(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.FailedLoginThreshold = 3
 	cfg.RateLimitPerMin = 10
+	cfg.WebcamCaptureEnabled = false // Disable real webcam during basic away test
 
 	eng := NewEngine(cfg, store)
 
@@ -96,4 +100,103 @@ func TestEngineSuppressionWhenNotAway(t *testing.T) {
 		t.Errorf("expected queue size 0, got %d", store.QueueSize())
 	}
 	_ = reason
+}
+
+type mockCapturer struct {
+	imagePath string
+	status    string
+	err       error
+}
+
+func (m *mockCapturer) Capture(ctx context.Context, eventID string) (string, string, error) {
+	return m.imagePath, m.status, m.err
+}
+
+func TestEngineWebcamAntivirusFallback(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "engine_av_test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	dbPath := filepath.Join(tempDir, "store.json")
+	store, _ := storage.NewStorage(dbPath, true) // Away mode ON
+	cfg := config.DefaultConfig()
+
+	eng := NewEngine(cfg, store)
+	// Inject a mock capturer simulating antivirus blocking
+	eng.SetCapturer(&mockCapturer{
+		imagePath: "",
+		status:    "Blocked by Antivirus, security policy, or OS privacy permissions (Access Denied)",
+		err:       errors.New("permission denied"),
+	})
+
+	evt := event.SecurityEvent{
+		ID:        "fail-av-blocked",
+		Timestamp: time.Now(),
+		EventType: event.LoginFailure,
+		Username:  "intruder",
+	}
+
+	alerted, reason := eng.ProcessEvent(evt)
+	if !alerted {
+		t.Fatalf("expected alert even when webcam capture is blocked by antivirus: %s", reason)
+	}
+
+	queuedEvt, err := store.Dequeue()
+	if err != nil || queuedEvt == nil {
+		t.Fatalf("failed to dequeue event: %v", err)
+	}
+
+	if queuedEvt.ImagePath != "" {
+		t.Errorf("expected empty ImagePath on AV block, got %s", queuedEvt.ImagePath)
+	}
+
+	if !strings.Contains(queuedEvt.WebcamStatus, "Blocked by Antivirus") {
+		t.Errorf("expected AV diagnostic status, got %s", queuedEvt.WebcamStatus)
+	}
+}
+
+func TestEngineWebcamSuccess(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "engine_success_test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	dbPath := filepath.Join(tempDir, "store.json")
+	store, _ := storage.NewStorage(dbPath, true) // Away mode ON
+	cfg := config.DefaultConfig()
+
+	eng := NewEngine(cfg, store)
+	mockPath := filepath.Join(tempDir, "test_capture.jpg")
+	eng.SetCapturer(&mockCapturer{
+		imagePath: mockPath,
+		status:    "Webcam snapshot captured successfully",
+		err:       nil,
+	})
+
+	evt := event.SecurityEvent{
+		ID:        "fail-webcam-ok",
+		Timestamp: time.Now(),
+		EventType: event.LoginFailure,
+		Username:  "intruder",
+	}
+
+	alerted, reason := eng.ProcessEvent(evt)
+	if !alerted {
+		t.Fatalf("expected alert: %s", reason)
+	}
+
+	queuedEvt, err := store.Dequeue()
+	if err != nil || queuedEvt == nil {
+		t.Fatalf("failed to dequeue event: %v", err)
+	}
+
+	if queuedEvt.ImagePath != mockPath {
+		t.Errorf("expected ImagePath %s, got %s", mockPath, queuedEvt.ImagePath)
+	}
+	if queuedEvt.WebcamStatus != "Webcam snapshot captured successfully" {
+		t.Errorf("expected success status, got %s", queuedEvt.WebcamStatus)
+	}
 }

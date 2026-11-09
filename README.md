@@ -85,6 +85,11 @@ lapdog test
   - **Away Mode Toggle**: Suppresses non-critical alerts when user is at the machine; fires alerts when Away Mode is ARMED.
   - **Brute Force Escalation**: Automatically escalates multiple failed logins in a short window to `CRITICAL` severity.
   - **Rate Limiting & Deduplication**: Throttles alert bursts and discards duplicate events.
+- **Webcam Snapshot on Failed Authentication**:
+  - Captures a temporary webcam photo on failed login attempts and stores it in `~/.lapdog/captures/`.
+  - Dispatches as a high-resolution photo with HTML caption via Telegram `sendPhoto`.
+  - **Graceful Antivirus & Exception Fallback**: If antivirus software, OS privacy permissions, or another application (busy camera) prevents access, `lap-dog` falls back immediately without dropping the alert, and diagnoses the exact block reason to the user on Telegram.
+  - **Offline Storage & Auto-Cleanup**: The photo persists safely in the local queue while offline and is automatically deleted from disk once delivered.
 - **Offline-First Storage Queue**: Local JSON/queue store ensures zero alert loss during network drops with automatic retry backoff.
 - **Telegram Bot Integration**:
   - HTML alerts with emoji indicators (🔴, 🔒, ⚠️).

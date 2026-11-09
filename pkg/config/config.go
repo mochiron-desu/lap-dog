@@ -25,6 +25,8 @@ type Config struct {
 	FailedLoginWindowSec int           `yaml:"failed_login_window_seconds" json:"failed_login_window_seconds"`
 	RateLimitPerMin      int           `yaml:"rate_limit_per_min" json:"rate_limit_per_min"`
 	MockMode             bool          `yaml:"mock_mode" json:"mock_mode"`
+	WebcamCaptureEnabled bool          `yaml:"webcam_capture_enabled" json:"webcam_capture_enabled"`
+	WebcamCaptureDir     string        `yaml:"webcam_capture_dir" json:"webcam_capture_dir"`
 }
 
 func DefaultConfig() *Config {
@@ -37,6 +39,7 @@ func DefaultConfig() *Config {
 
 	homeDir, _ := os.UserHomeDir()
 	defaultStorage := filepath.Join(homeDir, ".lapdog", "lapdog_store.json")
+	defaultCaptures := filepath.Join(homeDir, ".lapdog", "captures")
 
 	return &Config{
 		TelegramBotToken:     "",
@@ -51,6 +54,8 @@ func DefaultConfig() *Config {
 		FailedLoginWindowSec: 120, // 2 minutes
 		RateLimitPerMin:      5,
 		MockMode:             false,
+		WebcamCaptureEnabled: true,
+		WebcamCaptureDir:     defaultCaptures,
 	}
 }
 
@@ -76,6 +81,11 @@ func LoadConfig(path string) (*Config, error) {
 	if strings.HasPrefix(cfg.StoragePath, "~/") {
 		home, _ := os.UserHomeDir()
 		cfg.StoragePath = filepath.Join(home, cfg.StoragePath[2:])
+	}
+
+	if strings.HasPrefix(cfg.WebcamCaptureDir, "~/") {
+		home, _ := os.UserHomeDir()
+		cfg.WebcamCaptureDir = filepath.Join(home, cfg.WebcamCaptureDir[2:])
 	}
 
 	if cfg.DeviceID == "" {

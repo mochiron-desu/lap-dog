@@ -49,4 +49,10 @@ func TestConfigLoadSave(t *testing.T) {
 	if loaded.FailedLoginWindow() != 120*time.Second {
 		t.Errorf("expected 120s window, got %v", loaded.FailedLoginWindow())
 	}
+	if !loaded.WebcamCaptureEnabled {
+		t.Errorf("expected default webcam_capture_enabled true")
+	}
+	if loaded.WebcamCaptureDir == "" {
+		t.Errorf("expected non-empty webcam_capture_dir")
+	}
 }

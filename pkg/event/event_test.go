@@ -42,6 +42,23 @@ func TestSecurityEventFormatting(t *testing.T) {
 	if !strings.Contains(html, "System Log:") {
 		t.Errorf("expected 'System Log:' in html, got: %s", html)
 	}
+
+	// Test webcam status formatting
+	evtWithPhoto := evt
+	evtWithPhoto.ImagePath = "/tmp/snap.jpg"
+	evtWithPhoto.WebcamStatus = "Snapshot captured successfully"
+	htmlPhoto := evtWithPhoto.FormatTelegramHTML()
+	if !strings.Contains(htmlPhoto, "📸 <b>Webcam Snapshot:</b> Snapshot captured successfully") {
+		t.Errorf("expected success webcam status in html, got: %s", htmlPhoto)
+	}
+
+	evtBlocked := evt
+	evtBlocked.ImagePath = ""
+	evtBlocked.WebcamStatus = "Blocked by Antivirus, security policy, or OS privacy permissions (Access Denied)"
+	htmlBlocked := evtBlocked.FormatTelegramHTML()
+	if !strings.Contains(htmlBlocked, "📷 <b>Webcam Snapshot:</b> ⚠️ Blocked by Antivirus") {
+		t.Errorf("expected blocked webcam status warning in html, got: %s", htmlBlocked)
+	}
 }
 
 func TestHumanExplanationDictionary(t *testing.T) {

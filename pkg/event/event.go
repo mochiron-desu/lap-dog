@@ -39,8 +39,10 @@ type SecurityEvent struct {
 	Source    string    `json:"source" yaml:"source"`
 	SourceIP  string    `json:"source_ip,omitempty" yaml:"source_ip,omitempty"`
 	LogonType string    `json:"logon_type,omitempty" yaml:"logon_type,omitempty"`
-	Severity  Severity  `json:"severity" yaml:"severity"`
-	Details   string    `json:"details,omitempty" yaml:"details,omitempty"`
+	Severity     Severity  `json:"severity" yaml:"severity"`
+	Details      string    `json:"details,omitempty" yaml:"details,omitempty"`
+	ImagePath    string    `json:"image_path,omitempty" yaml:"image_path,omitempty"`
+	WebcamStatus string    `json:"webcam_status,omitempty" yaml:"webcam_status,omitempty"`
 }
 
 // Fingerprint generates a deterministic hash to identify duplicate events in a short window
@@ -113,7 +115,19 @@ func (e *SecurityEvent) FormatTelegramHTML() string {
 	}
 
 	if e.Details != "" {
-		msg += fmt.Sprintf("🔍 <b>System Log:</b> <code>%s</code>", escapeHTML(e.Details))
+		details := e.Details
+		if len(details) > 300 {
+			details = details[:297] + "..."
+		}
+		msg += fmt.Sprintf("🔍 <b>System Log:</b> <code>%s</code>\n", escapeHTML(details))
+	}
+
+	if e.WebcamStatus != "" {
+		if e.ImagePath != "" {
+			msg += fmt.Sprintf("\n📸 <b>Webcam Snapshot:</b> %s", escapeHTML(e.WebcamStatus))
+		} else {
+			msg += fmt.Sprintf("\n📷 <b>Webcam Snapshot:</b> ⚠️ %s", escapeHTML(e.WebcamStatus))
+		}
 	}
 
 	return msg

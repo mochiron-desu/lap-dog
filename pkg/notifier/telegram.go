@@ -7,7 +7,11 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -79,6 +83,71 @@ func (t *TelegramNotifier) SendMessage(chatID int64, text string) error {
 	return nil
 }
 
+// SendPhoto uploads a photo with an HTML caption via Telegram's sendPhoto API
+func (t *TelegramNotifier) SendPhoto(chatID int64, photoPath string, caption string) error {
+	if t.cfg.TelegramBotToken == "" {
+		return fmt.Errorf("telegram_bot_token is not configured")
+	}
+
+	file, err := os.Open(photoPath)
+	if err != nil {
+		return fmt.Errorf("failed to open photo file: %w", err)
+	}
+	defer file.Close()
+
+	var b bytes.Buffer
+	w := multipart.NewWriter(&b)
+
+	if err := w.WriteField("chat_id", strconv.FormatInt(chatID, 10)); err != nil {
+		return err
+	}
+
+	if caption != "" {
+		// Telegram photo caption maximum length is 1024 characters
+		if len(caption) > 1024 {
+			caption = caption[:1020] + "..."
+		}
+		if err := w.WriteField("caption", caption); err != nil {
+			return err
+		}
+		if err := w.WriteField("parse_mode", "HTML"); err != nil {
+			return err
+		}
+	}
+
+	part, err := w.CreateFormFile("photo", filepath.Base(photoPath))
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(part, file); err != nil {
+		return err
+	}
+
+	if err := w.Close(); err != nil {
+		return err
+	}
+
+	endpoint := fmt.Sprintf("%s/bot%s/sendPhoto", t.baseURL, t.cfg.TelegramBotToken)
+	req, err := http.NewRequest("POST", endpoint, &b)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+
+	resp, err := t.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("http request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("telegram API error (status %d): %s", resp.StatusCode, string(respBody))
+	}
+
+	return nil
+}
+
 // StartQueueDispatcher runs the offline-first retry loop to send queued alerts
 func (t *TelegramNotifier) StartQueueDispatcher(ctx context.Context) {
 	ticker := time.NewTicker(500 * time.Millisecond)
@@ -108,9 +177,31 @@ func (t *TelegramNotifier) StartQueueDispatcher(ctx context.Context) {
 			}
 
 			msg := evt.FormatTelegramHTML()
-			err = t.SendMessage(t.cfg.TelegramChatID, msg)
-			if err != nil {
-				log.Printf("[Notifier] Failed to dispatch Telegram alert (will re-enqueue): %v", err)
+			var dispatchErr error
+
+			// Check if event has a webcam snapshot attached
+			if evt.ImagePath != "" {
+				if _, statErr := os.Stat(evt.ImagePath); statErr == nil {
+					dispatchErr = t.SendPhoto(t.cfg.TelegramChatID, evt.ImagePath, msg)
+					if dispatchErr != nil {
+						log.Printf("[Notifier] SendPhoto failed: %v. Attempting SendMessage fallback...", dispatchErr)
+						// Fallback to text message so alert is never lost if image transmission fails
+						dispatchErr = t.SendMessage(t.cfg.TelegramChatID, msg)
+					}
+					if dispatchErr == nil {
+						// Clean up temporary photo once successfully delivered
+						_ = os.Remove(evt.ImagePath)
+					}
+				} else {
+					log.Printf("[Notifier] Snapshot %s no longer on disk; falling back to text alert", evt.ImagePath)
+					dispatchErr = t.SendMessage(t.cfg.TelegramChatID, msg)
+				}
+			} else {
+				dispatchErr = t.SendMessage(t.cfg.TelegramChatID, msg)
+			}
+
+			if dispatchErr != nil {
+				log.Printf("[Notifier] Failed to dispatch Telegram alert (will re-enqueue): %v", dispatchErr)
 				_ = t.store.Enqueue(*evt) // Re-enqueue for retry
 
 				// Exponential backoff up to 30s

@@ -21,3 +21,10 @@ rate_limit_per_min: 5
 
 # Enable mock/simulator detector for testing without OS audit permissions
 mock_mode: false
+
+# Webcam snapshot capture on failed authentication attempts
+# Captures a photo locally, saves it temporarily, and sends it via Telegram.
+# If an antivirus, OS permission check, or busy camera blocks capture,
+# lap-dog gracefully falls back and informs you of the exact reason on Telegram.
+webcam_capture_enabled: true
+webcam_capture_dir: "~/.lapdog/captures"

@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"lap-dog/pkg/capture"
 	"lap-dog/pkg/config"
 	"lap-dog/pkg/detector"
 	"lap-dog/pkg/engine"
@@ -205,6 +206,12 @@ func runAgent(cfg *config.Config) {
 	notif := notifier.NewTelegramNotifier(cfg, store)
 	notif.SetVersion(version)
 
+	if cfg.WebcamCaptureEnabled {
+		if pruned, err := capture.CleanupOldCaptures(cfg.WebcamCaptureDir, 7*24*time.Hour); err == nil && pruned > 0 {
+			log.Printf("[main] Cleaned up %d expired webcam snapshot(s) from %s", pruned, cfg.WebcamCaptureDir)
+		}
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -288,6 +295,11 @@ func showStatus(cfgPath string) {
 	fmt.Printf("Pending Queue:  %d events\n", pending)
 	fmt.Printf("Sent History:   %d events\n", sent)
 	fmt.Printf("Storage Path:   %s\n", cfg.StoragePath)
+	if cfg.WebcamCaptureEnabled {
+		fmt.Printf("Webcam Capture: Enabled (Dir: %s)\n", cfg.WebcamCaptureDir)
+	} else {
+		fmt.Printf("Webcam Capture: Disabled\n")
+	}
 	if cfg.TelegramBotToken != "" {
 		fmt.Printf("Telegram Bot:   Configured (Chat ID: %d)\n", cfg.TelegramChatID)
 	} else {
@@ -318,6 +330,18 @@ func sendTestAlert(cfgPath string) {
 		Source:    "CLI 'lapdog test'",
 		Severity:  event.SeverityMedium,
 		Details:   "Manual test alert generated via CLI",
+	}
+
+	if cfg.WebcamCaptureEnabled {
+		capturer := capture.NewWebcamCapturer(cfg.WebcamCaptureDir, true)
+		img, status, err := capturer.Capture(context.Background(), testEvt.ID)
+		testEvt.ImagePath = img
+		testEvt.WebcamStatus = status
+		if err != nil {
+			fmt.Printf("⚠️  Webcam snapshot notice: %s\n", status)
+		} else if img != "" {
+			fmt.Printf("📸 Webcam snapshot captured: %s\n", img)
+		}
 	}
 
 	if err := store.Enqueue(testEvt); err != nil {
