@@ -11,6 +11,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"lap-dog/pkg/osutil"
 )
 
 // Capturer defines an interface for capturing webcam photos
@@ -194,6 +196,7 @@ func captureWindows(ctx context.Context, outputPath string) (string, error) {
 			"-frames:v", "1",
 			outputPath,
 		)
+		osutil.PrepareSilentCommand(cmd)
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
 		if err := cmd.Run(); err == nil {
@@ -212,6 +215,7 @@ $storageFile = [Windows.Storage.StorageFile]::GetFileFromPathAsync("%s").AsTask(
 `, outputPath)
 
 	cmd := exec.CommandContext(ctx, "powershell", "-NoProfile", "-NonInteractive", "-Command", psScript)
+	osutil.PrepareSilentCommand(cmd)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	err := cmd.Run()

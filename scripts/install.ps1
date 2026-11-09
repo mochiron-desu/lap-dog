@@ -1,4 +1,4 @@
-# lap-dog Security Agent Windows PowerShell Installer
+﻿# lap-dog Security Agent Windows PowerShell Installer
 # Usage: irm https://raw.githubusercontent.com/mochiron-desu/lap-dog/main/scripts/install.ps1 | iex
 
 $ErrorActionPreference = "Stop"
@@ -97,4 +97,4 @@ Write-Host ""
 Write-Host "✅ lap-dog installed successfully!" -ForegroundColor Green
 Write-Host "Next Steps:" -ForegroundColor Cyan
 Write-Host "1. Run 'lapdog setup' in PowerShell for interactive configuration & service setup."
-Write-Host "2. Or edit $ConfigFile and run 'lapdog run'."
+Write-Host "2. Or configure $ConfigFile and run 'lapdog service install' for auto-start at login."

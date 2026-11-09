@@ -59,9 +59,8 @@ If `lap-dog` is actively running as a background service, you **must restart the
   ```
 - **Windows (Task Scheduler / PowerShell)**:
   ```powershell
+  schtasks /End /TN "lapdog"
   schtasks /Run /TN "lapdog"
-  # or if running as a Windows Service:
-  Restart-Service lapdog
   ```
 - **Manual CLI Execution**: Press `Ctrl+C` to stop the daemon, then re-run `lapdog run`.
 
@@ -94,7 +93,7 @@ lapdog test
 - **Telegram Bot Integration**:
   - HTML alerts with emoji indicators (🔴, 🔒, ⚠️).
   - Interactive bot commands: `/away` (Arm), `/back` (Disarm), `/status` (Metrics), `/test`, `/help`.
-- **Background Daemon & Service Installer**: Built-in `lapdog service install` for systemd, launchd, and Windows Services.
+- **Background Daemon & Service Installer**: Built-in `lapdog service install` for systemd, launchd, and windowless Windows Task Scheduler.
 
 ---
 
@@ -152,7 +151,7 @@ Alternatively, go to **System Settings > Privacy & Security** and click **"Allow
 | `lapdog test` | Enqueues and sends a test alert notification |
 | `lapdog simulate` | Injects synthetic test events (`--event LOGIN_FAILURE --user attacker`) |
 | `lapdog update` | Checks for newer releases on GitHub and displays platform upgrade instructions |
-| `lapdog service install` | Registers lap-dog as a background system service (systemd / launchd / Windows Service) |
+| `lapdog service install` | Registers lap-dog as a windowless background daemon (systemd / launchd / Windows Task Scheduler) |
 | `lapdog service uninstall` | Unregisters background system service |
 | `lapdog uninstall` | Uninstalls lap-dog, stops background service, and removes binary (`--purge` removes `~/.lapdog`) |
 | `lapdog version` | Displays version, commit hash, build date, and platform architecture |
